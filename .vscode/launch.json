@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Launch Backend and Frontend",
+      "configurations": ["Launch Backend", "Launch Frontend"]
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Launch Backend",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/portfolio_backend/manage.py",
+      "args": ["runserver", "0.0.0.0:8000"],
+      "django": true,
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "Launch Frontend",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/portfolio_frontend/node_modules/vite/bin/vite.js",
+      "cwd": "${workspaceFolder}/portfolio_frontend",
+      "console": "integratedTerminal"
+    }
+  ]
+}
