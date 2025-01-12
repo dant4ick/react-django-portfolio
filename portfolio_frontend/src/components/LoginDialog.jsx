@@ -10,7 +10,7 @@ export function LoginDialog({ isOpen, setIsOpen }) {
     const handleLogin = async (values) => {
         try {
             const response = await axios.post(
-                "http://127.0.0.1:8000/api/token/",
+                "/api/token/",
                 values
             );
             localStorage.setItem("token", response.data.access);
