@@ -13,6 +13,10 @@ import { SunOutlined, MoonOutlined } from "@ant-design/icons";
 import { RiTelegram2Fill, RiGithubFill } from "react-icons/ri";
 import PropTypes from "prop-types";
 
+import logoDark from "../assets/site_logo_dark.svg";
+import logoLight from "../assets/site_logo_light.svg";
+
+
 const { Header, Content, Footer } = Layout;
 const { defaultAlgorithm, darkAlgorithm } = antdTheme;
 
@@ -42,9 +46,7 @@ export default function MainLayout({ children }) {
         const updateFavicon = () => {
             const favicon = document.getElementById("favicon");
             if (favicon) {
-                favicon.href = darkMode
-                    ? "/site_logo_dark.svg"
-                    : "/site_logo_light.svg";
+                favicon.href = darkMode ? logoDark : logoLight;
             }
         };
 
@@ -104,8 +106,8 @@ export default function MainLayout({ children }) {
                                 <img
                                     src={
                                         darkMode
-                                            ? "/site_logo_dark.svg"
-                                            : "/site_logo_light.svg"
+                                            ? logoDark
+                                            : logoLight
                                     }
                                     alt="Logo"
                                     style={{
