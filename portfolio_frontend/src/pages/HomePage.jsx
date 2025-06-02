@@ -62,7 +62,7 @@ export default function PortfolioHomePage() {
     const filteredProjects = featuredProjects.filter(
         (project) =>
             project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            project.short_description
+            project.description
                 .toLowerCase()
                 .includes(searchQuery.toLowerCase()) ||
             project.technologies.some((tech) =>
