@@ -18,7 +18,7 @@ class ProjectListViewTests(TestCase):
             technologies=['Django', 'React'], 
             tags=['web', 'backend'], 
             links=['https://github.com/project1'], 
-            created_at='2023-01-01T00:00:00Z'
+            created_at='2023-01-01T00:00:00Z',
             attached_files=['image1.jpg', 'document1.pdf']
         )
         Project.objects.create(
@@ -27,7 +27,7 @@ class ProjectListViewTests(TestCase):
             technologies=['Flask', 'Vue'], 
             tags=['web', 'frontend'], 
             links=['https://github.com/project2'], 
-            created_at='2023-01-02T00:00:00Z'
+            created_at='2023-01-02T00:00:00Z',
             attached_files=['image2.jpg', 'document2.pdf']
         )
 
