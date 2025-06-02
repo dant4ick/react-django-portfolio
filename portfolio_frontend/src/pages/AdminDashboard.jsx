@@ -19,11 +19,13 @@ import {
     ProjectOutlined,
     ClockCircleOutlined,
     StarFilled,
+    SettingOutlined,
 } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { AddProjectDialog } from "../components/AddProjectDialog";
 import { EditProjectDialog } from "../components/EditProjectDialog";
 import { LoginDialog } from "../components/LoginDialog";
+import RelationSettingsDialog from "../components/RelationSettingsDialog";
 import axios from "axios";
 import { getToken } from "../services/auth";
 import { fetchProjectsAsync, deleteProject } from "../store/projectsSlice";
@@ -38,6 +40,7 @@ const AdminDashboard = () => {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
     const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+    const [isRelationSettingsOpen, setIsRelationSettingsOpen] = useState(false);
 
     useEffect(() => {
         dispatch(fetchProjectsAsync());
@@ -106,14 +109,23 @@ const AdminDashboard = () => {
 
             <Flex justify="space-between" align="center" gap="middle">
                 <Title level={4}>Проекты</Title>
-                <Input
-                    placeholder="Поиск проектов"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    prefix={<SearchOutlined />}
-                    style={{ width: 300 }}
-                    allowClear
-                />
+                <Space>
+                    <Button
+                        icon={<SettingOutlined />}
+                        onClick={() => setIsRelationSettingsOpen(true)}
+                        title="Настройки связанных проектов"
+                    >
+                        Настройки связей
+                    </Button>
+                    <Input
+                        placeholder="Поиск проектов"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        prefix={<SearchOutlined />}
+                        style={{ width: 300 }}
+                        allowClear
+                    />
+                </Space>
             </Flex>
 
             <Table
@@ -218,6 +230,12 @@ const AdminDashboard = () => {
                 isOpen={isEditDialogOpen}
                 setIsOpen={setIsEditDialogOpen}
                 project={selectedProject}
+                onUnauthorized={() => setIsLoginDialogOpen(true)}
+            />
+
+            <RelationSettingsDialog
+                isOpen={isRelationSettingsOpen}
+                setIsOpen={setIsRelationSettingsOpen}
                 onUnauthorized={() => setIsLoginDialogOpen(true)}
             />
 

@@ -2,9 +2,8 @@ import json
 from urllib.parse import unquote
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from .models import Project, ProjectFile
+from .models import Project, ProjectFile, RelationSettings
 from .serializers import ProjectSerializer
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
@@ -26,8 +25,12 @@ class ProjectListView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        permission_classes = [IsAuthenticated]
-        self.check_permissions(permission_classes)
+        # Check authentication
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         data = json.loads(request.data.dict()['projectData'])        
         attached_files_data = request.FILES.getlist("attached_files")
@@ -47,15 +50,29 @@ class ProjectListView(APIView):
 
 class ProjectDetailView(APIView):
     def get_related_projects(self, project):
+        # Get current relation settings
+        relation_settings = RelationSettings.get_current_settings()
+        excluded_tags = set(relation_settings.excluded_tags or [])
+        excluded_technologies = set(relation_settings.excluded_technologies or [])
+        
         related_projects = Project.objects.exclude(id=project.id)
         
         # Calculate the match score for each project
         def match_score(p):
             score = 0
+            
+            # Filter out excluded tags when calculating similarity
             if project.tags and p.tags:
-                score += len(set(project.tags) & set(p.tags))
+                project_tags = set(project.tags) - excluded_tags
+                p_tags = set(p.tags) - excluded_tags
+                score += len(project_tags & p_tags)
+            
+            # Filter out excluded technologies when calculating similarity
             if project.technologies and p.technologies:
-                score += len(set(project.technologies) & set(p.technologies))
+                project_techs = set(project.technologies) - excluded_technologies
+                p_techs = set(p.technologies) - excluded_technologies
+                score += len(project_techs & p_techs)
+            
             return score
         
         # Annotate projects with their match score and filter out those with no matches
@@ -83,8 +100,12 @@ class ProjectDetailView(APIView):
         return Response(project_data)
 
     def put(self, request, id):
-        permission_classes = [IsAuthenticated]
-        self.check_permissions(permission_classes)
+        # Check authentication
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         try:
             project = Project.objects.get(id=id)
@@ -123,8 +144,12 @@ class ProjectDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, id):
-        permission_classes = [IsAuthenticated]
-        self.check_permissions(permission_classes)
+        # Check authentication
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         try:
             project = Project.objects.get(id=id)
@@ -142,6 +167,58 @@ class TechnologiesListView(APIView):
             if project.technologies:
                 technologies.update(project.technologies)
         return Response(list(technologies))
+
+
+class RelationSettingsView(APIView):
+    def get(self, request):
+        """Get current relation settings"""
+        # Check authentication
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        settings = RelationSettings.get_current_settings()
+        return Response({
+            'excluded_tags': settings.excluded_tags or [],
+            'excluded_technologies': settings.excluded_technologies or [],
+            'updated_at': settings.updated_at
+        })
+    
+    def put(self, request):
+        """Update relation settings"""
+        # Check authentication
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            # Get or create the settings instance
+            settings = RelationSettings.get_current_settings()
+            
+            # Update the fields from request data
+            excluded_tags = request.data.get('excluded_tags', [])
+            excluded_technologies = request.data.get('excluded_technologies', [])
+            
+            settings.excluded_tags = excluded_tags
+            settings.excluded_technologies = excluded_technologies
+            settings.save()
+            
+            return Response({
+                'excluded_tags': settings.excluded_tags or [],
+                'excluded_technologies': settings.excluded_technologies or [],
+                'updated_at': settings.updated_at,
+                'message': 'Settings updated successfully'
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 @receiver(post_delete, sender=Project)

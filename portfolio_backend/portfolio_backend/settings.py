@@ -26,7 +26,7 @@ SECRET_KEY = config('DJANGO_SECRET_KEY', default='django-insecure-ra8edyt#g=l+0!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DJANGO_DEBUG', cast=bool, default=True)
 
-ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='').split(',')
+ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1,localhost').split(',')
 
 
 # Application definition
