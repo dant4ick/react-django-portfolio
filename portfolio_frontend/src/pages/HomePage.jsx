@@ -9,10 +9,14 @@ import {
     PostgresqlOriginal,
     FirebaseOriginal,
     ReactOriginal,
+    FlutterOriginal,
+    COriginal,
+    JavascriptOriginal,
+    GodotOriginal,
 } from "devicons-react";
 import { Button, Space, Typography, Input, Row, Col, Flex, Card } from "antd";
 import axios from "axios";
-import { LoadingOutlined, SearchOutlined } from '@ant-design/icons';
+import { CodeOutlined, SearchOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -24,9 +28,13 @@ const iconMap = {
     "Django": <DjangoPlain size={32} />,
     "PostgreSQL": <PostgresqlOriginal size={32} />,
     "Firebase": <FirebaseOriginal size={32} />,
+    "Flutter": <FlutterOriginal size={32} />,
+    "C": <COriginal size={32} />,
+    "JavaScript": <JavascriptOriginal size={32} />,
+    "GDScript": <GodotOriginal size={32} />,
 };
 
-const placeholderIcon = <LoadingOutlined style={{ fontSize: 32}} />;
+const placeholderIcon = <CodeOutlined style={{ fontSize: 32, color: '#8c8c8c' }} />;
 
 export default function PortfolioHomePage() {
     const [searchQuery, setSearchQuery] = useState("");
