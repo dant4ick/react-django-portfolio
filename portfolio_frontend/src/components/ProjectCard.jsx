@@ -46,7 +46,7 @@ export default function ProjectCard({ project }) {
                 )}
 
                 {project.links?.length > 0 && (
-                    <Flex gap="small">
+                    <Flex gap="small" wrap>
                         {project.links.map((link) => (
                             <LinkButton key={link} link={link} />
                         ))}

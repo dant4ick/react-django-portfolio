@@ -1,0 +1,172 @@
+name: Deploy Portfolio to Server
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  # Django settings for CI steps
+  DJANGO_SETTINGS_MODULE: portfolio_backend.settings
+  DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+  DJANGO_DEBUG: False
+  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+  
+  # Rsync exclude patterns
+  RSYNC_EXCLUDES: --exclude='venv' --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' --exclude='db.sqlite3' --exclude='media' --exclude='static'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate required secrets
+      run: |
+        if [ -z "${{ secrets.DJANGO_SECRET_KEY }}" ]; then
+          echo "Error: DJANGO_SECRET_KEY secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+          echo "Error: SERVER_HOST secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SERVER_USER }}" ]; then
+          echo "Error: SERVER_USER secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          echo "Error: SSH_PRIVATE_KEY secret is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SSH_PORT }}" ]; then
+          echo "Error: SSH_PORT secret is not set"
+          exit 1
+        fi
+        echo "All required secrets are configured"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: portfolio_frontend/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install frontend dependencies
+      working-directory: ./portfolio_frontend
+      run: npm ci
+
+    - name: Build frontend
+      working-directory: ./portfolio_frontend
+      run: npm run build
+
+    - name: Verify frontend build
+      run: |
+        if [ ! -d "portfolio_frontend/dist" ]; then
+          echo "Frontend build failed - dist directory not found"
+          exit 1
+        fi
+        echo "Frontend build successful"
+
+    - name: Install backend dependencies
+      working-directory: ./portfolio_backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Django tests
+      working-directory: ./portfolio_backend
+      run: |
+        python manage.py test
+
+    - name: Collect Django static files
+      working-directory: ./portfolio_backend
+      run: |
+        python manage.py collectstatic --noinput
+
+    - name: Create deployment package
+      run: |
+        # Create deployment directory
+        mkdir -p deploy-package
+        
+        # Copy built frontend
+        cp -r portfolio_frontend/dist deploy-package/frontend-dist
+        
+        # Copy only necessary backend files (exclude production data)
+        rsync -av ${{ env.RSYNC_EXCLUDES }} portfolio_backend/ deploy-package/backend/
+        
+        # Create deployment archive
+        tar -czf deploy-package.tar.gz deploy-package/
+
+    - name: Upload deployment package to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        source: "deploy-package.tar.gz"
+        target: "/tmp/"
+
+    - name: Deploy on server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        script: |
+          set -e
+          
+          # Navigate to project directory
+          cd /var/www/react-django-portfolio
+          
+          # Extract deployment package
+          tar -xzf /tmp/deploy-package.tar.gz -C /tmp/
+          
+          # Update frontend (replace with built version)
+          rm -rf portfolio_frontend/dist
+          mv /tmp/deploy-package/frontend-dist portfolio_frontend/dist
+          
+          # Update backend files (safely, preserving production data)
+          rsync -av --exclude='venv' --exclude='.env' --exclude='db.sqlite3' --exclude='media' --exclude='static' /tmp/deploy-package/backend/ portfolio_backend/
+          
+          # Update Python dependencies only if requirements changed
+          cd portfolio_backend
+          source venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Run Django management commands
+          python manage.py migrate --noinput
+          
+          # Verify deployment
+          python manage.py check --deploy
+          
+          # Clean up
+          rm -rf /tmp/deploy-package /tmp/deploy-package.tar.gz
+          
+          # Restart services
+          sudo systemctl restart portfolio_gunicorn
+          sudo systemctl reload nginx
+
+    - name: Send deployment notification
+      run: |
+        echo "Deployment completed successfully to dant4ick.ru"
+
+    - name: Health check
+      run: |
+        echo "Waiting for services to start..."
+        sleep 10
+        echo "Checking if the API is responding..."
+        if curl -f -s https://dant4ick.ru/api/health/ > /dev/null; then
+          echo "✅ Health check passed - API is responding"
+        else
+          echo "⚠️ Health check failed - API may not be responding yet"
+          echo "This doesn't necessarily mean deployment failed"
+        fi

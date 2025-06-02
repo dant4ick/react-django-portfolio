@@ -1,0 +1,21 @@
+[Unit]
+Description=Portfolio Django Backend
+After=network.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/react-django-portfolio/portfolio_backend
+Environment=PATH=/var/www/react-django-portfolio/portfolio_backend/venv/bin
+Environment=DJANGO_SETTINGS_MODULE=portfolio_backend.settings
+Environment=DJANGO_SECRET_KEY=your-production-secret-key-here
+Environment=DJANGO_DEBUG=False
+Environment=DJANGO_ALLOWED_HOSTS=dant4ick.ru,www.dant4ick.ru
+ExecStart=/var/www/react-django-portfolio/portfolio_backend/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 portfolio_backend.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

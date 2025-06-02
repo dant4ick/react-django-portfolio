@@ -8,6 +8,8 @@ from .models import Project, ProjectFile
 from .serializers import ProjectSerializer
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
+from rest_framework.decorators import api_view
+from django.http import JsonResponse
 
 
 class ProjectListView(APIView):
@@ -151,3 +153,12 @@ def delete_attached_files(sender, instance, **kwargs):
         for file in instance.attached_files.all():
             file.file.delete()  # Deletes the file from storage
         instance.attached_files.clear()
+
+
+@api_view(['GET'])
+def health_check(request):
+    """Simple health check endpoint"""
+    return JsonResponse({
+        'status': 'healthy',
+        'message': 'API is running'
+    })
