@@ -80,6 +80,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Run Django tests
+      working-directory: ./portfolio_backend
+      run: |
+        python manage.py test
+
     - name: Collect Django static files
       working-directory: ./portfolio_backend
       run: |
