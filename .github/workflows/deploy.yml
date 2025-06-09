@@ -172,9 +172,9 @@ jobs:
           sudo systemctl restart portfolio_gunicorn
           sudo systemctl reload nginx
 
-      - name: Send deployment notification
-        run: |
-          echo "Deployment completed successfully to dant4ick.ru"
+    - name: Send deployment notification
+      run: |
+        echo "Deployment completed successfully to dant4ick.ru"
 
   health_check:
     runs-on: ubuntu-latest
