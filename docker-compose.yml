@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Django Backend
+  backend:
+    image: ghcr.io/dant4ick/react-django-portfolio-backend:latest
+    container_name: portfolio-backend
+    restart: unless-stopped
+    volumes:
+      - /var/www/portfolio/data:/app/data
+      - /var/www/portfolio/data/media:/app/media
+      - /var/www/portfolio/data/static:/app/static
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-dant4ick.ru,www.dant4ick.ru}
+    networks:
+      - portfolio-network
+    depends_on:
+      - db-init
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/', timeout=10)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # React Frontend
+  frontend:
+    image: ghcr.io/dant4ick/react-django-portfolio-frontend:latest
+    container_name: portfolio-frontend
+    restart: unless-stopped
+    volumes:
+      - /var/www/portfolio/data/static:/var/www/static:ro
+      - /var/www/portfolio/data/media:/var/www/media:ro
+    networks:
+      - portfolio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Watchtower for automatic updates
+  watchtower:
+    image: containrrr/watchtower
+    container_name: portfolio-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_ROLLING_RESTART=true
+    command: --interval 300 --cleanup portfolio-backend portfolio-frontend
+    networks:
+      - portfolio-network
+
+  # Database initialization service
+  db-init:
+    image: ghcr.io/dant4ick/react-django-portfolio-backend:latest
+    container_name: portfolio-db-init
+    restart: "no"
+    volumes:
+      - /var/www/portfolio/data:/app/data
+      - /var/www/portfolio/data/media:/app/media
+      - /var/www/portfolio/data/static:/app/static
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-dant4ick.ru,www.dant4ick.ru}
+    command: >
+      sh -c "
+        python manage.py migrate &&
+        python manage.py collectstatic --noinput &&
+        echo 'Database initialized successfully'
+      "
+    networks:
+      - portfolio-network
+
+networks:
+  portfolio-network:
+    driver: bridge

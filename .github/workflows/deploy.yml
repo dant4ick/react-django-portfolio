@@ -1,194 +1,82 @@
-name: Deploy Portfolio to Server
+name: Build and Push Docker Images
 
 on:
   push:
     branches: [ main ]
 
 env:
-  # Django settings for CI steps
-  DJANGO_SETTINGS_MODULE: portfolio_backend.settings
-  DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-  DJANGO_DEBUG: False
-  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
-  
-  # Rsync exclude patterns
-  RSYNC_EXCLUDES: --exclude='venv' --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' --exclude='db.sqlite3' --exclude='media' --exclude='static'
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}-frontend
 
 jobs:
-  build_test:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Validate required secrets
-      run: |
-        if [ -z "${{ secrets.DJANGO_SECRET_KEY }}" ]; then
-          echo "Error: DJANGO_SECRET_KEY secret is not set"
-          exit 1
-        fi
-        if [ -z "${{ secrets.SERVER_HOST }}" ]; then
-          echo "Error: SERVER_HOST secret is not set"
-          exit 1
-        fi
-        if [ -z "${{ secrets.SERVER_USER }}" ]; then
-          echo "Error: SERVER_USER secret is not set"
-          exit 1
-        fi
-        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-          echo "Error: SSH_PRIVATE_KEY secret is not set"
-          exit 1
-        fi
-        if [ -z "${{ secrets.SSH_PORT }}" ]; then
-          echo "Error: SSH_PORT secret is not set"
-          exit 1
-        fi
-        echo "All required secrets are configured"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
       with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: portfolio_frontend/package-lock.json
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
       with:
-        python-version: '3.11'
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Install frontend dependencies
-      working-directory: ./portfolio_frontend
-      run: npm ci
-
-    - name: Build frontend
-      working-directory: ./portfolio_frontend
-      run: npm run build
-
-    - name: Verify frontend build
-      run: |
-        if [ ! -d "portfolio_frontend/dist" ]; then
-          echo "Frontend build failed - dist directory not found"
-          exit 1
-        fi
-        echo "Frontend build successful"
-
-    - name: Install backend dependencies
-      working-directory: ./portfolio_backend
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Run Django tests
-      working-directory: ./portfolio_backend
-      run: |
-        python manage.py test
-
-    - name: Collect Django static files
-      working-directory: ./portfolio_backend
-      run: |
-        python manage.py collectstatic --noinput
-
-    - name: Create deployment package
-      run: |
-        # Create deployment directory
-        mkdir -p deploy-package
-
-        # Copy built frontend
-        cp -r portfolio_frontend/dist deploy-package/frontend-dist
-
-        # Copy only necessary backend files (exclude production data)
-        rsync -av ${{ env.RSYNC_EXCLUDES }} portfolio_backend/ deploy-package/backend/
-
-        # Create deployment archive
-        tar -czf deploy-package.tar.gz deploy-package/
-
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v4
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
       with:
-        name: deploy-package
-        path: deploy-package.tar.gz
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build_test
-
-    steps:
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
       with:
-        name: deploy-package
-        path: .
+        context: ./portfolio_backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
 
-    - name: Upload deployment package to server
-      uses: appleboy/scp-action@v0.1.7
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
       with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: ${{ secrets.SSH_PORT }}
-        source: "deploy-package.tar.gz"
-        target: "/tmp/"
+        context: ./portfolio_frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
 
-    - name: Deploy on server
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: ${{ secrets.SSH_PORT }}
-        script: |
-          set -e
-          
-          # Navigate to project directory
-          cd /var/www/react-django-portfolio
-          
-          # Extract deployment package
-          tar -xzf /tmp/deploy-package.tar.gz -C /tmp/
-          
-          # Update frontend (replace with built version)
-          rm -rf portfolio_frontend/dist
-          mv /tmp/deploy-package/frontend-dist portfolio_frontend/dist
-          
-          # Update backend files (safely, preserving production data)
-          rsync -av --exclude='venv' --exclude='.env' --exclude='db.sqlite3' --exclude='media' --exclude='static' /tmp/deploy-package/backend/ portfolio_backend/
-          
-          # Update Python dependencies only if requirements changed
-          cd portfolio_backend
-          source venv/bin/activate
-          pip install -r requirements.txt
-          
-          # Run Django management commands
-          python manage.py migrate --noinput
-          
-          # Verify deployment
-          python manage.py check --deploy
-          
-          # Clean up
-          rm -rf /tmp/deploy-package /tmp/deploy-package.tar.gz
-          
-          # Restart services
-          sudo systemctl restart portfolio_gunicorn
-          sudo systemctl reload nginx
-
-    - name: Send deployment notification
+    - name: Deployment notification
       run: |
-        echo "Deployment completed successfully to dant4ick.ru"
-
-  health_check:
-    runs-on: ubuntu-latest
-    needs: deploy
-
-    steps:
-    - name: Health check
-      run: |
-        echo "Waiting for services to start..."
-        sleep 10
-        echo "Checking if the API is responding..."
-        if curl -f -s https://dant4ick.ru/api/health/ > /dev/null; then
-          echo "✅ Health check passed - API is responding"
-        else
-          echo "⚠️ Health check failed - API may not be responding yet"
-          echo "This doesn't necessarily mean deployment failed"
-        fi
+        echo "🐳 Images built and pushed successfully!"
+        echo "Backend: ${{ steps.meta-backend.outputs.tags }}"
+        echo "Frontend: ${{ steps.meta-frontend.outputs.tags }}"
+        echo "Watchtower will automatically deploy these images to the server."
